@@ -1,0 +1,46 @@
+
+function cleanup() {
+    status="$?"
+    jobs="$(jobs -p)"
+    if [ -n "$jobs" ]
+    then
+        # shellcheck disable=SC2086 # Intended splitting of
+        kill $jobs
+    fi
+    wait
+    if [ "$status" = "0" ]; then
+      echo "buildkite-test passed"
+    else
+      echo "buildkite-test failed with $status"
+    fi
+}
+trap cleanup EXIT
+
+os="$(uname)"
+arch="$(uname -m)"
+
+if [ "$os" = "Darwin" ]; then
+    if [ "$arch" = "arm64" ]; then
+        EARTHLY_OS="darwin-m1"
+        download_url="https://github.com/earthly/earthly/releases/latest/download/earthly-darwin-arm64"
+        earthly="./build/darwin/arm64/earthly"
+    else
+        EARTHLY_OS="darwin"
+        download_url="https://github.com/earthly/earthly/releases/latest/download/earthly-darwin-amd64"
+        earthly="./build/darwin/amd64/earthly"
+    fi
+elif [ "$os" = "Linux" ]; then
+    EARTHLY_OS="linux"
+    download_url="https://github.com/earthly/earthly/releases/latest/download/earthly-linux-amd64"
+    earthly="./build/linux/amd64/earthly"
+else
+    echo "failed to handle $os, $arch"
+    exit 1
+fi
+
+echo "The detected architecture of the runner is $(uname -m)"
+
+if ! git symbolic-ref -q HEAD >/dev/null; then
+    echo "Add branch info back to git (Earthly uses it for tagging)"
+    git checkout -B "$BUILDKITE_BRANCH" || true
+fi
